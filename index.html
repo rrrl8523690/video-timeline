@@ -1,0 +1,187 @@
+<html>
+<header>
+</header>
+
+<body>
+  <table>
+    <tr>
+      <td><label for="horizontal-bar-width">horizontal bar width in px: </label></td>
+      <td><input id="horizontal-bar-width" type="number" value="1080"></td>
+    </tr>
+    <tr>
+      <td><label for="horizontal-bar-height"></label>horizontal bar height in px: </label></td>
+      <td><input id="horizontal-bar-height" type="number" value="5"></td>
+    </tr>
+    <tr>
+      <td><label for=vertical-bar-width">vertical bar width in px: </label></td>
+      <td><input id="vertical-bar-width" type="number" value="3"></td>
+    </tr>
+    <tr>
+      <td><label for="vertical-bar-height">vertical bar height in px: </label></td>
+      <td><input id="vertical-bar-height" type="number" value="20"></td>
+    </tr>
+    <tr>
+      <td><label for="bar-color">vertical bar height in px: </label></td>
+      <td><input id="bar-color" type="text" value="blue"></td>
+    </tr>
+    <tr>
+      <td><label for="font">font: </label></td>
+      <td><input id="font" type="text" value="15px sans-serif"></td>
+    </tr>
+    <tr>
+      <td><label for="font-color">font color: </label></td>
+      <td><input id="font-color" type="text" value="blue"></td>
+    </tr>
+    <tr>
+      <td><label for="video-length">video length (h:m:s or m:s or s): </label></td>
+      <td><input id="video-length" type="text" value="60:00"></td>
+    </tr>
+  </table>
+  <table id="keypoints">
+    <tr>
+      <td>time</td>
+      <td>topic</td>
+    </tr>
+    <tr class="keypoint-row">
+      <td><input class="keypoint-time" type="text" value="00:00" readonly></td>
+      <td><input class="keypoint-topic" type="text"></td>
+    </tr>
+  </table>
+  <div>
+    <button id="add-keypoint">+</button>
+  </div>
+  <div>
+    <a id="export" href="#">export</a>
+  </div>
+  <hr>
+  <div><canvas id="timeline-canvas">
+  </div>
+
+
+  </canvas>
+  <script>
+    window.addEventListener("load", () => {
+      const draw = () => {
+        const canvas = byId("timeline-canvas");
+        const ctx = canvas.getContext("2d");
+        ctx.imageSmoothingQuality = "high"
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const hWidth = byId("horizontal-bar-width").value;
+        const hHeight = byId("horizontal-bar-height").value;
+        const vWidth = byId("vertical-bar-width").value;
+        const vHeight = byId("vertical-bar-height").value;
+        canvas.height = vHeight + hHeight;
+        ctx.fillStyle = byId("bar-color").value;
+        ctx.fillRect(0, vHeight, hWidth, hHeight);
+        const videoLength = parseTime(byId("video-length").value);
+        const keypoints = getAllKeypoints();
+        keypoints.push({ time: videoLength, topic: "end" });
+        for (const keypoint of keypoints) {
+          const ratio = keypoint.time * 1.0 / videoLength;
+          const x = ratio * hWidth;
+          keypoint.x = x;
+        }
+        for (const keypoint of keypoints) {
+          ctx.fillRect(keypoint.x - vWidth / 2, 0, vWidth, vHeight);
+        }
+        const font = byId("font").value;
+        const fontColor = byId("font-color").value;
+
+        for (let i = 0; i + 1 < keypoints.length; ++i) {
+          if (keypoints[i].x >= keypoints[i + 1].x) {
+            continue;
+          }
+          const x = (keypoints[i].x + keypoints[i + 1].x) / 2.0;
+          const text = keypoints[i].topic;
+          ctx.font = font;
+          console.log(ctx.font);
+          ctx.textAlign = "center";
+          ctx.textBaseline = "top";
+          ctx.fillStyle = fontColor;
+          ctx.fillText(keypoints[i].topic, x, 3);
+        }
+        const link = byId('export');
+        link.setAttribute('download', 'timeline.png');
+        link.setAttribute('href', byId("timeline-canvas").toDataURL("image/png").replace("image/png", "image/octet-stream"));
+      };
+      const byId = (x) => document.getElementById(x);
+      const byClass = (x) => document.getElementsByClassName(x);
+      const parseTime = (s) => {  // to seconds
+        const parts = s.split(":");
+        if (parts.length > 3) { // if invalid, return 1
+          return 1;
+        }
+        parts.reverse();
+        while (parts.length < 3) {
+          parts.push("0");
+        }
+        const ret = parseInt(parts[0], 10) + parseInt(parts[1], 10) * 60 + parseInt(parts[2], 10) * 3600;
+        return ret;
+      };
+      const bindData = (dataId, viewId, attr, transform = (x) => x, events = ["input", "change"]) => {
+        byId(viewId).setAttribute(attr, transform(byId(dataId).value));
+        (transform(byId(dataId).value));
+        for (const eventName of events) {
+          byId(dataId).addEventListener(eventName, (e) => {
+            byId(viewId).setAttribute(attr, transform(e.target.value));
+            draw();
+          });
+        }
+      };
+      bindData("horizontal-bar-width", "timeline-canvas", "width", (x) => x + "px");
+
+      const htmlToElem = (html) => {
+        let temp = document.createElement('template');
+        html = html.trim(); // Never return a space text node as a result
+        temp.innerHTML = html;
+        return temp.content.firstChild;
+      }
+      const getAllKeypoints = () => {
+        const keypointRows = document.getElementsByClassName("keypoint-row");
+        const ret = [];
+        for (const row of keypointRows) {
+          const timeInput = row.getElementsByClassName("keypoint-time")[0];
+          const topicInput = row.getElementsByClassName("keypoint-topic")[0];
+          ret.push({ time: parseTime(timeInput.value), topic: topicInput.value });
+        }
+        return ret;
+      };
+      const drawOnEvent = (doms, events) => {
+        for (const dom of doms) {
+          for (const eventName of events) {
+            dom.addEventListener(eventName, (e) => {
+              draw();
+            });
+          }
+        }
+      };
+      byId("add-keypoint").addEventListener("click", (e) => {
+        const deleteButton = document.createElement("button");
+        deleteButton.innerHTML = "-";
+        deleteButton.addEventListener("click", (e) => {
+          e.target.parentNode.parentNode.remove();
+        });
+        drawOnEvent([deleteButton], ["click"]);
+        const buttonTd = document.createElement("td");
+        buttonTd.appendChild(deleteButton);
+        const tr = document.createElement("tr");
+        tr.setAttribute("class", "keypoint-row");
+        const timeInput = htmlToElem(`<td><input class="keypoint-time" type="text" value="00:00"></td>`);
+        const topicInput = htmlToElem(`<td><input class="keypoint-topic" type="text"></td>`);
+        drawOnEvent([timeInput, topicInput], ["input", "change"])
+        tr.appendChild(timeInput);
+        tr.appendChild(topicInput);
+        tr.appendChild(buttonTd);
+        byId("keypoints").appendChild(tr);
+      });
+      drawOnEvent(byClass("keypoint-topic"), ["input", "change"]);
+      drawOnEvent([byId("video-length"), byId("bar-color"), byId("vertical-bar-width"), byId("vertical-bar-height")], ["input", "change"]);
+      drawOnEvent([byId("font"), byId("font-color")], ["input", "change"]);
+      drawOnEvent([byId("add-keypoint")], ["click"]);
+      drawOnEvent([byId("horizontal-bar-height")], ["input", "change"]);
+      draw();
+    });
+  </script>
+</body>
+
+</html>
